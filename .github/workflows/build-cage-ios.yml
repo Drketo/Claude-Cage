@@ -1,1 +1,46 @@
+name: Build Cage for iPhone
+on:
+  workflow_dispatch:
+    inputs:
+      cage_ref:
+        description: 'Cage version matching your PC, e.g. v0.1.8'
+        required: true
+        default: v0.1.8
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: Lee-xeo/Claude-Cage
+          ref: ${{ inputs.cage_ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: mobile/bindings/go.mod
+          cache: false
+      - name: Build iPhone app
+        run: |
+          npm ci --prefix ui
+          bash mobile/build.sh ios
+      - name: Package unsigned IPA
+        run: |
+          app=mobile/.build/ios/products/Debug-iphoneos/CageMobile.app
+          test -f "$app/Info.plist"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          ditto "$app" "$RUNNER_TEMP/ipa/Payload/CageMobile.app"
+          cd "$RUNNER_TEMP/ipa"
+          ditto -c -k --keepParent Payload Cage-iPhone-unsigned.ipa
+          unzip -t Cage-iPhone-unsigned.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cage-iPhone-unsigned
+          path: ${{ runner.temp }}/ipa/Cage-iPhone-unsigned.ipa
+          if-no-files-found: error
 
